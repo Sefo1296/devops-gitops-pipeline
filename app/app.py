@@ -27,11 +27,11 @@ body {{
 
 .card {{
     background:white;
-    width:450px;
-    padding:35px;
+    width:500px;
+    padding:40px;
     border-radius:20px;
-    box-shadow:0 10px 30px rgba(0,0,0,0.3);
     text-align:center;
+    box-shadow:0 15px 35px rgba(0,0,0,0.3);
 }}
 
 h1 {{
@@ -39,34 +39,26 @@ h1 {{
     font-size:32px;
 }}
 
-.welcome {{
-    color:#555;
-    font-size:18px;
+.status {{
+    background:#d4edda;
+    color:#155724;
+    padding:10px;
+    border-radius:10px;
+    margin:20px;
+    font-weight:bold;
 }}
 
 .info {{
-    background:#f4f6ff;
-    padding:15px;
-    border-radius:12px;
-    margin-top:20px;
     text-align:left;
-}}
-
-.badge {{
-    display:inline-block;
-    background:#28a745;
-    color:white;
-    padding:8px 15px;
-    border-radius:20px;
-    margin-top:15px;
+    background:#f8f9fa;
+    padding:20px;
+    border-radius:15px;
 }}
 
 .footer {{
     margin-top:20px;
-    color:#888;
-    font-size:13px;
+    color:#777;
 }}
-
 </style>
 
 </head>
@@ -77,30 +69,25 @@ h1 {{
 
 <h1>🚀 DevOps GitOps Pipeline</h1>
 
-<p class="welcome">
-Welcome to the new colorful Flask application!
-</p>
-
-<div class="badge">
-Application Healthy
+<div class="status">
+✅ Application Running Successfully
 </div>
-
 
 <div class="info">
 
-<p><b>Version:</b> {APP_VERSION}</p>
+<p><strong>Version:</strong> {APP_VERSION}</p>
 
-<p><b>Hostname:</b> {socket.gethostname()}</p>
+<p><strong>Hostname:</strong> {socket.gethostname()}</p>
 
-<p><b>Time:</b> {datetime.now()}</p>
+<p><strong>Deployment:</strong> Kubernetes + ArgoCD</p>
+
+<p><strong>Time:</strong> {datetime.now()}</p>
 
 </div>
-
 
 <div class="footer">
-Powered by Jenkins + Docker + Kubernetes + ArgoCD
+Built with Flask | Docker | Jenkins | Kubernetes
 </div>
-
 
 </div>
 
