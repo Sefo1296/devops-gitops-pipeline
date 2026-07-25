@@ -1,29 +1,68 @@
-apiVersion: v1
-kind: Pod
+apiVersion: "v1"
+kind: "Pod"
+
+metadata:
+  labels:
+    app: jenkins-agent
 
 spec:
-  serviceAccountName: default
+  restartPolicy: Never
 
   containers:
-    - name: python
-      image: python:3.11
-      command:
-        - cat
-      tty: true
 
-    - name: kaniko
-      image: gcr.io/kaniko-project/executor:debug
-      command:
-        - /busybox/sh
-      args:
-        - -c
-        - "sleep 999999"
-      tty: true
-      volumeMounts:
-        - name: docker-config
-          mountPath: /kaniko/.docker
+  - name: python
+    image: python:3.11
+    command:
+    - cat
+    tty: true
+    volumeMounts:
+    - name: workspace-volume
+      mountPath: /home/jenkins/agent
+
+
+  - name: kaniko
+    image: gcr.io/kaniko-project/executor:debug
+    command:
+    - /busybox/sh
+    args:
+    - -c
+    - sleep 999999
+
+    tty: true
+
+    volumeMounts:
+    - name: docker-config
+      mountPath: /kaniko/.docker
+
+    - name: workspace-volume
+      mountPath: /home/jenkins/agent
+
+
+  - name: jnlp
+    image: jenkins/inbound-agent:latest
+
+    env:
+    - name: JENKINS_URL
+      value: http://jenkins.default.svc.cluster.local:8080/
+
+    - name: JENKINS_TUNNEL
+      value: jenkins-agent.default.svc.cluster.local:50000
+
+    volumeMounts:
+    - name: workspace-volume
+      mountPath: /home/jenkins/agent
+
 
   volumes:
-    - name: docker-config
-      secret:
-        secretName: dockerhub-secret
+
+  # FIXED DOCKER AUTH FOR KANIKO
+  - name: docker-config
+    secret:
+      secretName: dockerhub-secret
+      items:
+      - key: .dockerconfigjson
+        path: config.json
+
+
+  - name: workspace-volume
+    emptyDir: {}
