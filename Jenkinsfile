@@ -7,40 +7,51 @@ pipeline {
     }
 
 
-    environment {
-        IMAGE_NAME = "sefo1296/devops-gitops-app"
-        IMAGE_TAG = "v${BUILD_NUMBER}"
-    }
-
-
     stages {
-
 
         stage('Checkout') {
             steps {
-                checkout scm
+
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: '*/main']],
+                    userRemoteConfigs: [[
+                        url: 'https://github.com/Sefo1296/devops-gitops-pipeline.git',
+                        credentialsId: 'github-creds'
+                    ]]
+                ])
+
             }
         }
 
 
         stage('Install Dependencies') {
             steps {
+
                 container('python') {
+
                     sh '''
                     pip install -r app/requirements.txt
                     '''
+
                 }
+
             }
         }
 
 
         stage('Run Tests') {
+
             steps {
+
                 container('python') {
+
                     sh '''
                     pytest app/test_app.py
                     '''
+
                 }
+
             }
         }
 
@@ -52,13 +63,18 @@ pipeline {
                 container('kaniko') {
 
                     sh '''
+
                     /kaniko/executor \
                     --context=$WORKSPACE \
                     --dockerfile=$WORKSPACE/Dockerfile \
-                    --destination=${IMAGE_NAME}:${IMAGE_TAG}
+                    --destination=sefo1296/devops-gitops-app:v${BUILD_NUMBER}
+
                     '''
+
                 }
+
             }
+
         }
 
 
@@ -69,17 +85,15 @@ pipeline {
                 withCredentials([
                     usernamePassword(
                         credentialsId: 'github-creds',
-                        usernameVariable: 'GIT_USERNAME',
+                        usernameVariable: 'GIT_USER',
                         passwordVariable: 'GIT_TOKEN'
                     )
                 ]) {
 
 
                     sh '''
-                    
-                    echo "Updating Helm image tag..."
 
-                    sed -i "s/tag:.*/tag: \\"${IMAGE_TAG}\\"/" helm/flask-app/values.yaml
+                    sed -i "s/tag:.*/tag: \"v${BUILD_NUMBER}\"/" helm/flask-app/values.yaml
 
 
                     git config user.email "saifeldinelsalamony@gmail.com"
@@ -89,15 +103,24 @@ pipeline {
                     git add helm/flask-app/values.yaml
 
 
-                    git commit -m "Update image tag to ${IMAGE_TAG}" || echo "No changes"
+                    git commit -m "Update image tag to v${BUILD_NUMBER}" || true
 
 
-                    git push https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/Sefo1296/devops-gitops-pipeline.git main
+                    git remote set-url origin https://${GIT_USER}:${GIT_TOKEN}@github.com/Sefo1296/devops-gitops-pipeline.git
+
+
+                    git push origin HEAD:main
+
 
                     '''
+
                 }
+
             }
+
         }
 
+
     }
+
 }
