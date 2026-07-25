@@ -1,12 +1,12 @@
 pipeline {
     agent {
-        docker {
-            image 'python:3.11'
-            args '-v /var/run/docker.sock:/var/run/docker.sock'
+        kubernetes {
+            yamlFile 'pod.yaml'
         }
     }
 
     stages {
+
         stage('Checkout') {
             steps {
                 checkout scm
@@ -15,29 +15,28 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                sh 'pip install -r app/requirements.txt'
+                container('python') {
+                    sh 'pip install -r app/requirements.txt'
+                }
             }
         }
 
         stage('Run Tests') {
             steps {
-                sh 'pip install pytest'
-                sh 'pytest app/test_app.py'
+                container('python') {
+                    sh 'pytest app/test_app.py'
+                }
             }
         }
 
-        stage('Build Image') {
+        stage('Build & Push Image') {
             steps {
-                sh 'docker build -t sefo1296/devops-gitops-app:v1 .'
-            }
-        }
-
-        stage('Push Image') {
-            steps {
-                withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+                container('kaniko') {
                     sh '''
-                    echo $PASS | docker login -u $USER --password-stdin
-                    docker push sefo1296/devops-gitops-app:v1
+                    /kaniko/executor \
+                      --context=$WORKSPACE \
+                      --dockerfile=$WORKSPACE/Dockerfile \
+                      --destination=sefo1296/devops-gitops-app:v1
                     '''
                 }
             }
