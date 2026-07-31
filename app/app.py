@@ -196,16 +196,17 @@ def get_restart_count():
 
 
 def get_cpu():
-
-    # Requires metrics-server
-    return "N/A"
+    pod = get_hostname()
+    return run_cmd(
+        f"kubectl top pod {pod} --no-headers | awk '{{print $2}}'"
+    )
 
 
 def get_memory():
-
-    # Requires metrics-server
-    return "N/A"
-
+    pod = get_hostname()
+    return run_cmd(
+        f"kubectl top pod {pod} --no-headers | awk '{{print $3}}'"
+    )
 
 @app.route("/api/dashboard")
 def dashboard():
