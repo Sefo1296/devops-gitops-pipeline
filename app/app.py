@@ -2,23 +2,28 @@ from flask import Flask, jsonify
 import socket
 from datetime import datetime
 import os
-import subprocess
+
+from kubernetes import client, config
+
 
 app = Flask(__name__)
 
 APP_VERSION = "3.0.0"
 
 
-def run_cmd(cmd):
-    try:
-        return subprocess.check_output(
-            cmd,
-            shell=True,
-            text=True,
-            stderr=subprocess.DEVNULL
-        ).strip()
-    except:
-        return "N/A"
+# Load Kubernetes configuration from inside the pod
+try:
+    config.load_incluster_config()
+
+    v1 = client.CoreV1Api()
+    apps = client.AppsV1Api()
+
+    kubernetes_available = True
+
+except Exception as e:
+    v1 = None
+    apps = None
+    kubernetes_available = False
 
 
 def get_hostname():
@@ -38,62 +43,168 @@ def get_build():
 
 
 def get_node():
-    return run_cmd("kubectl get pod $(hostname) -o jsonpath='{.spec.nodeName}'")
+
+    if not kubernetes_available:
+        return "N/A"
+
+    try:
+        pod = v1.read_namespaced_pod(
+            name=get_hostname(),
+            namespace=get_namespace()
+        )
+
+        return pod.spec.node_name
+
+    except Exception:
+        return "N/A"
 
 
 def get_pod_count():
-    return run_cmd("kubectl get pods --no-headers | wc -l")
+
+    if not kubernetes_available:
+        return 0
+
+    try:
+        pods = v1.list_namespaced_pod(
+            namespace=get_namespace()
+        )
+
+        return len(pods.items)
+
+    except Exception:
+        return 0
 
 
 def get_running_pods():
-    return run_cmd("kubectl get pods --no-headers | grep Running | wc -l")
+
+    if not kubernetes_available:
+        return 0
+
+    try:
+        pods = v1.list_namespaced_pod(
+            namespace=get_namespace()
+        )
+
+        return len([
+            pod for pod in pods.items
+            if pod.status.phase == "Running"
+        ])
+
+    except Exception:
+        return 0
 
 
 def get_service_count():
-    return run_cmd("kubectl get svc --no-headers | wc -l")
+
+    if not kubernetes_available:
+        return 0
+
+    try:
+        services = v1.list_namespaced_service(
+            namespace=get_namespace()
+        )
+
+        return len(services.items)
+
+    except Exception:
+        return 0
 
 
 def get_deployment_count():
-    return run_cmd("kubectl get deploy --no-headers | wc -l")
+
+    if not kubernetes_available:
+        return 0
+
+    try:
+        deployments = apps.list_namespaced_deployment(
+            namespace=get_namespace()
+        )
+
+        return len(deployments.items)
+
+    except Exception:
+        return 0
 
 
 def get_node_count():
-    return run_cmd("kubectl get nodes --no-headers | wc -l")
+
+    if not kubernetes_available:
+        return 0
+
+    try:
+        nodes = v1.list_node()
+
+        return len(nodes.items)
+
+    except Exception:
+        return 0
 
 
 def get_cluster_health():
-    result = run_cmd("kubectl get pods --no-headers")
 
-    if result == "N/A":
+    if not kubernetes_available:
         return "Unknown"
 
-    if "CrashLoopBackOff" in result:
-        return "Degraded"
+    try:
+        pods = v1.list_namespaced_pod(
+            namespace=get_namespace()
+        )
 
-    if "Error" in result:
-        return "Error"
+        for pod in pods.items:
 
-    return "Healthy"
+            if pod.status.phase in ["Failed", "Unknown"]:
+                return "Degraded"
 
+        return "Healthy"
 
-def get_cpu():
-    return run_cmd("kubectl top pod $(hostname) --no-headers | awk '{print $2}'")
-
-
-def get_memory():
-    return run_cmd("kubectl top pod $(hostname) --no-headers | awk '{print $3}'")
-
-
-def get_restart_count():
-    return run_cmd(
-        "kubectl get pod $(hostname) -o jsonpath='{.status.containerStatuses[0].restartCount}'"
-    )
+    except Exception:
+        return "Unknown"
 
 
 def get_pod_status():
-    return run_cmd(
-        "kubectl get pod $(hostname) -o jsonpath='{.status.phase}'"
-    )
+
+    if not kubernetes_available:
+        return "N/A"
+
+    try:
+        pod = v1.read_namespaced_pod(
+            name=get_hostname(),
+            namespace=get_namespace()
+        )
+
+        return pod.status.phase
+
+    except Exception:
+        return "N/A"
+
+
+def get_restart_count():
+
+    if not kubernetes_available:
+        return 0
+
+    try:
+        pod = v1.read_namespaced_pod(
+            name=get_hostname(),
+            namespace=get_namespace()
+        )
+
+        return pod.status.container_statuses[0].restart_count
+
+    except Exception:
+        return 0
+
+
+def get_cpu():
+
+    # Requires metrics-server
+    return "N/A"
+
+
+def get_memory():
+
+    # Requires metrics-server
+    return "N/A"
 
 
 @app.route("/api/dashboard")
@@ -211,11 +322,11 @@ text-decoration:none;
 </body>
 
 </html>
-
 """
 
 
 if __name__ == "__main__":
+
     app.run(
         host="0.0.0.0",
         port=5000
