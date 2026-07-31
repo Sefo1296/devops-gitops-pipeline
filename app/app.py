@@ -1,82 +1,200 @@
-from flask import Flask
+from flask import Flask, jsonify
 import socket
 from datetime import datetime
 import os
+import subprocess
 
 app = Flask(__name__)
 
-APP_VERSION = "2.0.0"
+APP_VERSION = "3.0.0"
+
+
+def run_cmd(cmd):
+    try:
+        return subprocess.check_output(
+            cmd,
+            shell=True,
+            text=True,
+            stderr=subprocess.DEVNULL
+        ).strip()
+    except:
+        return "N/A"
+
+
+def get_hostname():
+    return socket.gethostname()
+
+
+def get_namespace():
+    return os.getenv("KUBERNETES_NAMESPACE", "default")
+
+
+def get_image_tag():
+    return os.getenv("IMAGE_TAG", "latest")
+
+
+def get_build():
+    return os.getenv("BUILD_NUMBER", "Unknown")
+
+
+def get_node():
+    return run_cmd("kubectl get pod $(hostname) -o jsonpath='{.spec.nodeName}'")
+
+
+def get_pod_count():
+    return run_cmd("kubectl get pods --no-headers | wc -l")
+
+
+def get_running_pods():
+    return run_cmd("kubectl get pods --no-headers | grep Running | wc -l")
+
+
+def get_service_count():
+    return run_cmd("kubectl get svc --no-headers | wc -l")
+
+
+def get_deployment_count():
+    return run_cmd("kubectl get deploy --no-headers | wc -l")
+
+
+def get_node_count():
+    return run_cmd("kubectl get nodes --no-headers | wc -l")
+
+
+def get_cluster_health():
+    result = run_cmd("kubectl get pods --no-headers")
+
+    if result == "N/A":
+        return "Unknown"
+
+    if "CrashLoopBackOff" in result:
+        return "Degraded"
+
+    if "Error" in result:
+        return "Error"
+
+    return "Healthy"
+
+
+def get_cpu():
+    return run_cmd("kubectl top pod $(hostname) --no-headers | awk '{print $2}'")
+
+
+def get_memory():
+    return run_cmd("kubectl top pod $(hostname) --no-headers | awk '{print $3}'")
+
+
+def get_restart_count():
+    return run_cmd(
+        "kubectl get pod $(hostname) -o jsonpath='{.status.containerStatuses[0].restartCount}'"
+    )
+
+
+def get_pod_status():
+    return run_cmd(
+        "kubectl get pod $(hostname) -o jsonpath='{.status.phase}'"
+    )
+
+
+@app.route("/api/dashboard")
+def dashboard():
+
+    return jsonify({
+
+        "hostname": get_hostname(),
+
+        "version": APP_VERSION,
+
+        "namespace": get_namespace(),
+
+        "docker_tag": get_image_tag(),
+
+        "jenkins_build": get_build(),
+
+        "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+
+        "node": get_node(),
+
+        "cluster_health": get_cluster_health(),
+
+        "pod_status": get_pod_status(),
+
+        "restart_count": get_restart_count(),
+
+        "cpu": get_cpu(),
+
+        "memory": get_memory(),
+
+        "pods": get_pod_count(),
+
+        "running": get_running_pods(),
+
+        "deployments": get_deployment_count(),
+
+        "services": get_service_count(),
+
+        "nodes": get_node_count()
+
+    })
+
+
+@app.route("/health")
+def health():
+
+    return jsonify({
+
+        "status": "healthy",
+
+        "time": str(datetime.now())
+
+    })
+
+
+@app.route("/info")
+def info():
+
+    return jsonify({
+
+        "hostname": get_hostname(),
+
+        "version": APP_VERSION,
+
+        "namespace": get_namespace(),
+
+        "docker_tag": get_image_tag(),
+
+        "build": get_build()
+
+    })
+
 
 @app.route("/")
 def home():
 
-    hostname = socket.gethostname()
-    namespace = os.getenv("KUBERNETES_NAMESPACE", "default")
-    image = os.getenv("IMAGE_TAG", "latest")
-    build = os.getenv("BUILD_NUMBER", "Unknown")
-
-    return f"""
+    return """
 <!DOCTYPE html>
+
 <html>
+
 <head>
 
-<meta charset="UTF-8">
-<title>DevOps Dashboard</title>
+<title>DevOps Dashboard API</title>
 
 <style>
 
-body {{
-margin:0;
-font-family:Arial;
-background:linear-gradient(-45deg,#667eea,#764ba2,#6dd5fa,#23d5ab);
-background-size:400% 400%;
-animation:bg 12s ease infinite;
+body{
+background:#0f172a;
 color:white;
-}}
-
-@keyframes bg {{
-0%{{background-position:0% 50%;}}
-50%{{background-position:100% 50%;}}
-100%{{background-position:0% 50%;}}
-}}
-
-.container{{
-width:90%;
-max-width:1200px;
-margin:auto;
-padding:40px;
-}}
-
-h1{{
+font-family:Arial;
 text-align:center;
-font-size:42px;
-}}
+padding-top:100px;
+}
 
-.grid{{
-display:grid;
-grid-template-columns:repeat(auto-fit,minmax(250px,1fr));
-gap:20px;
-margin-top:40px;
-}}
-
-.card{{
-background:rgba(255,255,255,.15);
-backdrop-filter:blur(15px);
-padding:25px;
-border-radius:20px;
-transition:.3s;
-box-shadow:0 8px 20px rgba(0,0,0,.3);
-}}
-
-.card:hover{{
-transform:translateY(-8px);
-}}
-
-.value{{
-font-size:26px;
-font-weight:bold;
-margin-top:10px;
-}}
+a{
+color:#38bdf8;
+font-size:22px;
+text-decoration:none;
+}
 
 </style>
 
@@ -84,61 +202,21 @@ margin-top:10px;
 
 <body>
 
-<div class="container">
+<h1>🚀 DevOps Dashboard Backend</h1>
 
-<h1>🚀 DevOps Dashboard</h1>
+<p>Backend is running.</p>
 
-<div class="grid">
-
-<div class="card">
-Hostname
-<div class="value">{hostname}</div>
-</div>
-
-<div class="card">
-Version
-<div class="value">{APP_VERSION}</div>
-</div>
-
-<div class="card">
-Namespace
-<div class="value">{namespace}</div>
-</div>
-
-<div class="card">
-Docker Tag
-<div class="value">{image}</div>
-</div>
-
-<div class="card">
-Jenkins Build
-<div class="value">{build}</div>
-</div>
-
-<div class="card">
-Current Time
-<div class="value">{datetime.now().strftime("%H:%M:%S")}</div>
-</div>
-
-</div>
-
-</div>
+<p><a href="/api/dashboard">Open Dashboard API</a></p>
 
 </body>
+
 </html>
+
 """
 
-@app.route("/health")
-def health():
-    return {"status":"healthy"}
-
-@app.route("/info")
-def info():
-    return {
-        "version":APP_VERSION,
-        "hostname":socket.gethostname(),
-        "time":str(datetime.now())
-    }
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(
+        host="0.0.0.0",
+        port=5000
+    )
